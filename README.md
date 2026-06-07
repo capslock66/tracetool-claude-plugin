@@ -9,7 +9,7 @@ Send structured traces to the [TraceTool](https://github.com/capslock66/Tracetoo
 
 ## Installation
 
-in claude desktop:
+in claude desktop or in a console:
 
 ```bash
 claude plugin marketplace add capslock66/tracetool-claude-plugin
