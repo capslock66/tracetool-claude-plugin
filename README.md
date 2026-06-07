@@ -9,14 +9,25 @@ Send structured traces to the [TraceTool](https://github.com/capslock66/Tracetoo
 
 ## Installation
 
+in claude desktop:
+
 ```bash
-claude plugin install tracetool@<marketplace>
+claude plugin marketplace add capslock66/tracetool-claude-plugin
+claude plugin install tracetool@tracetool-plugins
+claude reload-plugins
 ```
 
-Or for local use:
+in claude cli:
+
 ```bash
-claude --plugin-dir ./ClaudePlugin
+
+/plugin marketplace add capslock66/tracetool-claude-plugin
+/plugin install tracetool@tracetool-plugins
+/reload-plugins
 ```
+
+Of course you need to install tracetool itself,
+see https://github.com/capslock66/tracetool
 
 ## Configuration
 
