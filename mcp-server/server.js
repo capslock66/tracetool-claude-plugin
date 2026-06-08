@@ -46,25 +46,6 @@ const server = new McpServer({
   version: "15.0.0",
 });
 
-
-server.tool(
-  "tracetool_demo",
-  "Demo tool that sends various traces to the TraceTool viewer. Returns the serialized node of the last trace sent.",
-  {
-    
-  },
-  async ({  }) => {
-    
-    let sender;
-    sender = ttrace["debug"];
-    var node = sender.send("Hello", "right");
-    node.sendStack("Stack trace demo");
-
-    return { content: [{ type: "text", text: JSON.stringify(node) }] };
-  }
-);
-
-
 // -----------------------------------------------------------------------
 // Tool: send
 // -----------------------------------------------------------------------
