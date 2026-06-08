@@ -46,6 +46,25 @@ const server = new McpServer({
   version: "15.0.0",
 });
 
+
+server.tool(
+  "tracetool_demo",
+  "Demo tool that sends various traces to the TraceTool viewer. Returns the serialized node of the last trace sent.",
+  {
+    
+  },
+  async ({  }) => {
+    
+    let sender;
+    sender = ttrace["debug"];
+    var node = sender.send("Hello", "right");
+    node.sendStack("Stack trace demo");
+
+    return { content: [{ type: "text", text: JSON.stringify(node) }] };
+  }
+);
+
+
 // -----------------------------------------------------------------------
 // Tool: send
 // -----------------------------------------------------------------------
@@ -150,6 +169,349 @@ server.tool(
     catch { return { content: [{ type: "text", text: "Error: rows must be a valid JSON array." }] }; }
     var node = sender.sendTable(message, parsed);
     return { content: [{ type: "text", text: JSON.stringify(node) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Helper: reconstruct a TraceNode from a JSON string returned by a previous tool
+// -----------------------------------------------------------------------
+function nodeFromJson(nodeJson) {
+  const obj = JSON.parse(nodeJson);
+  const node = new ttrace.classes.TraceNode(null, false);
+  node.id = obj.id;
+  node.winTraceId = obj.winTraceId || '';
+  return node;
+}
+
+// -----------------------------------------------------------------------
+// Tool: send_object
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_send_object",
+  "Send an object (class info, fields, methods) to the TraceTool viewer. If parentNode is provided, the object is attached as a child of that node.",
+  {
+    parentNode:        z.string().nullable().describe("JSON string of a previously returned node, or null to send at root level."),
+    level:             z.enum(["debug", "warning", "error"]).default("debug"),
+    message:           z.string().describe("Label for the object"),
+    obj:               z.string().describe("JSON-encoded object to inspect (will be parsed)"),
+    displayFunctions:  z.boolean().optional().describe("Whether to include functions in the object inspection"),
+  },
+  async ({ parentNode, level, message, obj, displayFunctions }) => {
+    let sender;
+    if (parentNode) {
+      sender = nodeFromJson(parentNode);
+    } else {
+      sender = ttrace[level];
+    }
+    let parsed;
+    try { parsed = JSON.parse(obj); } catch { parsed = obj; }
+    const node = sender.sendObject(message, parsed, displayFunctions);
+    return { content: [{ type: "text", text: JSON.stringify(node) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: send_stack
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_send_stack",
+  "Send the current call stack to the TraceTool viewer. If parentNode is provided, the stack is attached as a child of that node.",
+  {
+    parentNode: z.string().nullable().describe("JSON string of a previously returned node, or null to send at root level."),
+    level:      z.enum(["debug", "warning", "error"]).default("debug"),
+    message:    z.string().describe("Label for the stack trace"),
+    skipLevel:  z.number().int().min(0).default(0).optional().describe("Number of stack frames to skip"),
+  },
+  async ({ parentNode, level, message, skipLevel }) => {
+    let sender;
+    if (parentNode) {
+      sender = nodeFromJson(parentNode);
+    } else {
+      sender = ttrace[level];
+    }
+    const node = sender.sendStack(message, skipLevel);
+    return { content: [{ type: "text", text: JSON.stringify(node) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: send_dump
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_send_dump",
+  "Send a hex dump of a buffer to the TraceTool viewer. If parentNode is provided, the dump is attached as a child of that node.",
+  {
+    parentNode:  z.string().nullable().describe("JSON string of a previously returned node, or null to send at root level."),
+    level:       z.enum(["debug", "warning", "error"]).default("debug"),
+    message:     z.string().describe("Label for the dump"),
+    shortTitle:  z.string().describe("Short title displayed on top of the dump"),
+    buffer:      z.string().describe("The buffer content to dump"),
+    count:       z.number().int().optional().describe("Number of bytes to dump"),
+  },
+  async ({ parentNode, level, message, shortTitle, buffer, count }) => {
+    let sender;
+    if (parentNode) {
+      sender = nodeFromJson(parentNode);
+    } else {
+      sender = ttrace[level];
+    }
+    const node = sender.sendDump(message, shortTitle, buffer, count);
+    return { content: [{ type: "text", text: JSON.stringify(node) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: resend
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_resend",
+  "Override the left and/or right message of an existing node in the TraceTool viewer.",
+  {
+    node:        z.string().describe("JSON string of the node to update (returned by a previous send call)."),
+    leftMsg:     z.string().optional().describe("New left column message"),
+    rightMsg:    z.string().optional().describe("New right column message"),
+  },
+  async ({ node, leftMsg, rightMsg }) => {
+    const n = nodeFromJson(node);
+    n.resend(leftMsg, rightMsg);
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: resend_left
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_resend_left",
+  "Override the left column message of an existing node in the TraceTool viewer.",
+  {
+    node:    z.string().describe("JSON string of the node to update."),
+    leftMsg: z.string().describe("New left column message"),
+  },
+  async ({ node, leftMsg }) => {
+    const n = nodeFromJson(node);
+    n.resendLeft(leftMsg);
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: resend_right
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_resend_right",
+  "Override the right column message of an existing node in the TraceTool viewer.",
+  {
+    node:     z.string().describe("JSON string of the node to update."),
+    rightMsg: z.string().describe("New right column message"),
+  },
+  async ({ node, rightMsg }) => {
+    const n = nodeFromJson(node);
+    n.resendRight(rightMsg);
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: resend_icon_index
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_resend_icon_index",
+  "Change the icon of an existing node in the TraceTool viewer.",
+  {
+    node:  z.string().describe("JSON string of the node to update."),
+    index: z.number().int().describe("Icon index to set"),
+  },
+  async ({ node, index }) => {
+    const n = nodeFromJson(node);
+    n.resendIconIndex(index);
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: set_background_color
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_set_background_color",
+  "Change the background color of an existing node in the TraceTool viewer.",
+  {
+    node:  z.string().describe("JSON string of the node to update."),
+    color: z.string().describe("Color as #RRGGBB or RGB(r,g,b)"),
+    colId: z.number().int().default(-1).describe("Column index: all=-1, Icon=0, Time=1, Thread=2, Left=3, Right=4"),
+  },
+  async ({ node, color, colId }) => {
+    const n = nodeFromJson(node);
+    n.setBackgroundColor(color, colId);
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: append
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_append",
+  "Append text to the left and/or right column of an existing node in the TraceTool viewer.",
+  {
+    node:     z.string().describe("JSON string of the node to update."),
+    leftMsg:  z.string().optional().describe("Text to append to the left column"),
+    rightMsg: z.string().optional().describe("Text to append to the right column"),
+  },
+  async ({ node, leftMsg, rightMsg }) => {
+    const n = nodeFromJson(node);
+    n.append(leftMsg, rightMsg);
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: append_left
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_append_left",
+  "Append text to the left column of an existing node in the TraceTool viewer.",
+  {
+    node:    z.string().describe("JSON string of the node to update."),
+    leftMsg: z.string().describe("Text to append to the left column"),
+  },
+  async ({ node, leftMsg }) => {
+    const n = nodeFromJson(node);
+    n.appendLeft(leftMsg);
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: append_right
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_append_right",
+  "Append text to the right column of an existing node in the TraceTool viewer.",
+  {
+    node:     z.string().describe("JSON string of the node to update."),
+    rightMsg: z.string().describe("Text to append to the right column"),
+  },
+  async ({ node, rightMsg }) => {
+    const n = nodeFromJson(node);
+    n.appendRight(rightMsg);
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: show
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_show",
+  "Force a node to be displayed (scrolled into view) in the TraceTool viewer.",
+  {
+    node: z.string().describe("JSON string of the node to show."),
+  },
+  async ({ node }) => {
+    const n = nodeFromJson(node);
+    n.show();
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: set_selected
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_set_selected",
+  "Set a node as selected in the TraceTool viewer.",
+  {
+    node: z.string().describe("JSON string of the node to select."),
+  },
+  async ({ node }) => {
+    const n = nodeFromJson(node);
+    n.setSelected();
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: delete_it
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_delete_it",
+  "Delete a node from the TraceTool viewer.",
+  {
+    node: z.string().describe("JSON string of the node to delete."),
+  },
+  async ({ node }) => {
+    const n = nodeFromJson(node);
+    n.deleteIt();
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: delete_children
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_delete_children",
+  "Delete all children of a node in the TraceTool viewer.",
+  {
+    node: z.string().describe("JSON string of the node whose children will be deleted."),
+  },
+  async ({ node }) => {
+    const n = nodeFromJson(node);
+    n.deleteChildren();
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: set_bookmark
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_set_bookmark",
+  "Set or clear the bookmark flag of a node in the TraceTool viewer.",
+  {
+    node:       z.string().describe("JSON string of the node to bookmark."),
+    bookmarked: z.boolean().describe("true to set bookmark, false to clear it"),
+  },
+  async ({ node, bookmarked }) => {
+    const n = nodeFromJson(node);
+    n.setBookmark(bookmarked);
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: set_font_detail
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_set_font_detail",
+  "Change font details (bold, italic, color, size, name) for a column or a whole line of an existing node.",
+  {
+    node:      z.string().describe("JSON string of the node to update."),
+    colId:     z.number().int().default(-1).describe("Column index: whole line=-1, Icon=0, Time=1, Thread=2, Left=3, Right=4"),
+    bold:      z.boolean().default(true).describe("Bold font"),
+    italic:    z.boolean().default(false).describe("Italic font"),
+    color:     z.string().default("").describe("Font color as #RRGGBB or RGB(r,g,b)"),
+    size:      z.number().int().default(0).describe("Font size (0 = keep default)"),
+    fontName:  z.string().default("").describe("Font name (empty = keep default)"),
+  },
+  async ({ node, colId, bold, italic, color, size, fontName }) => {
+    const n = nodeFromJson(node);
+    n.setFontDetail(colId, bold, italic, color, size, fontName);
+    return { content: [{ type: "text", text: JSON.stringify(n) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: show_viewer
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_show_viewer",
+  "Show or hide the TraceTool viewer window.",
+  { isVisible: z.boolean().default(true).describe("true to show the viewer, false to hide it") },
+  async ({ isVisible }) => {
+    ttrace.show(isVisible);
+    return { content: [{ type: "text", text: JSON.stringify({ isVisible }) }] };
   }
 );
 

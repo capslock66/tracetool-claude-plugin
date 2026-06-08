@@ -18,7 +18,7 @@
 //     import 'tracetool';  
 //     var ttrace:any ;
 //     ttrace = window["ttrace"] ;
-//     ttrace.host = "127.0.0.1:85"; 
+//     ttrace.host = "127.0.0.1:81"; 
 //     ttrace.debug.send("Hello world");
 //
 //
@@ -55,21 +55,16 @@ var define;        // in case RequireJs is not used. Remove warning for use stri
 //--------------------------------------------------------------------------------------------------------
 
 var ttrace = null ;                        /** the tracetool api instance                               */ 
-
 var ttraceScript = null;                   /** current trace script. Used by sendToClientUsingScript()  */
 var headId = null;                         /** Shortcut to head. Used by sendToClientUsingScript()      */
-
-var request ;                              /** nodejs library                                           */
-var stackTrace;                            /** nodejs library                                           */
-var uuidv4 ;                               /** nodejs library                                           */
-
+var http ;                                 /** require('http')                                          */
 var requestId = 0;                         /** number of request                                        */
 var toSend = [];                           /** array of script to run.                                  */
 var nbDone = 0;                            /** number of message send                                   */ 
 var winTraceSingeton = null;               /** main WinTrace                                            */
 var watchesSingeton = null;                /** main WinWatch                                            */
 var clientId = "";                         /** Communication ID with the viewer                         */  
-var host = "127.0.0.1:85";                 /** Full Url to TraceTool viewer (localhost:85 for example)  */
+var host = "127.0.0.1:81";                 /** Full Url to TraceTool viewer (localhost:81 for example)  */
 var traceClasses = {};                     /** Contains all tracetool classes                           */
 
 var isChromeExtension ;                    /** library run under chrome as an extension                 */
@@ -83,16 +78,16 @@ var isSystemJS;                            /** library load by SystemJS         
     
 detectEnvironment() ;
 
-if (isRequireJs) 
+if (isRequireJs)
 {
-  stackTrace = require('stack-trace');
-  uuidv4     = require('uuid').v4;
-  clientId   = uuidv4().replace(/-/g, '');   // replace all(using g) '-' by empty string
+  clientId   = (typeof crypto !== "undefined" && crypto.randomUUID)
+               ? crypto.randomUUID().replace(/-/g, '')
+               : Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-if (isNodeJs)    
+if (isNodeJs)
 {
-    request = require('request');
+    http = require('http');
 } else if (isBrowser) {
     ttraceScript = null;                                       
     headId = global.document.getElementsByTagName("head")[0];
@@ -101,6 +96,60 @@ if (isNodeJs)
 //--------------------------------------------------------------------------------------------------------
 // Private helpers : extend, getFormattedTime, ...
 //--------------------------------------------------------------------------------------------------------
+
+/** Native replacement for the 'stack-trace' npm package.
+ *  Returns an array of V8 CallSite objects (same API: getFileName, getFunctionName, getLineNumber, toString).
+ *  belowFn: the function whose frame and everything above it is excluded (like stackTrace.get(belowFn)).
+ */
+function getCallStack(belowFn) {
+    if (typeof Error.captureStackTrace === 'function') {
+        // V8 (Node.js, Chrome) : returns native CallSite objects
+        var oldPrepare = Error.prepareStackTrace;
+        Error.prepareStackTrace = function(_, stack) { return stack; };
+        var err = new Error();
+        Error.captureStackTrace(err, belowFn || getCallStack);
+        var stack = err.stack;
+        Error.prepareStackTrace = oldPrepare;
+        return stack;
+    }
+    // Firefox / Safari : parse new Error().stack and return mock CallSite objects
+    var lines = (new Error().stack || '').split('\n');
+    var result = [];
+    var belowFnName = belowFn ? belowFn.name : null;
+    var foundBelowFn = !belowFnName;
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        var fileName = '', funcName = '', lineNumber = 0, colNumber = 0;
+        // Firefox format:  "funcName@file:line:col"  or  "@file:line:col"
+        // Safari format :  "funcName@file:line:col"  (same)
+        var atIdx = line.lastIndexOf('@');
+        if (atIdx !== -1) {
+            funcName = line.substring(0, atIdx) || '<anonymous>';
+            var loc = line.substring(atIdx + 1);
+            var parts = loc.split(':');
+            // loc = "http://host/path/file.js:42:10" → split gives [..., '42', '10']
+            colNumber  = parseInt(parts.pop(), 10) || 0;
+            lineNumber = parseInt(parts.pop(), 10) || 0;
+            fileName   = parts.join(':');
+        } else {
+            funcName = line;
+        }
+        if (!foundBelowFn) {
+            if (funcName === belowFnName) foundBelowFn = true;
+            continue;
+        }
+        (function(fn, file, ln) {
+            result.push({
+                getFunctionName: function() { return fn; },
+                getFileName:     function() { return file; },
+                getLineNumber:   function() { return ln; },
+                toString:        function() { return fn + ' (' + file + ':' + ln + ')'; }
+            });
+        })(funcName, fileName, lineNumber);
+    }
+    return result;
+}
 
 function safeLog(...args) {
   if (typeof process !== "undefined" && process.stderr)
@@ -294,7 +343,7 @@ function addMessage(objMessage)
 */
 function worker()
 {
-    safeLog("tracetool:worker stack count: " + toSend.length) ;
+    //safeLog("tracetool:worker stack count: " + toSend.length) ;
     var objMessage;
     if (toSend.length !== 0)
     {
@@ -309,7 +358,7 @@ function worker()
 
         nbDone++;
         if (isNodeJs)
-            sendToClientUsingRequest(hostUrl);
+            sendToClientUsingHttp(hostUrl);
         else if (isBrowser)
             sendToClientUsingScript(hostUrl);
         else // if (IsChromeExtension)
@@ -425,30 +474,27 @@ function sendToClientUsingXmlHttpRequest(hostUrl)
 
 //--------------------------------------------------------------------------------------------------------
 
-/** send message to the viewer using nodeJs request
+/** send message to the viewer using nodeJs http
 * @param {string} hostUrl message
 * @returns {void}
-*/  
-function sendToClientUsingRequest (hostUrl)
+*/
+function sendToClientUsingHttp (hostUrl)
 {
-
-   request(hostUrl, function (error, response) //, body)
+   var req = http.get(hostUrl, function (response)
    {
-       if (!error && response.statusCode === 200) 
+       var body = '';
+       response.on('data', function (chunk) { body += chunk; });
+       response.on('end', function ()
        {
-           // With the js tracetool API for browser, the response for "UniqueClientId" command is a single line script 
            // Sample script for "UniqueClientId" : ttrace.setClientID("123");
-           // Sample script for other messages   : ttrace._done("_1",""); 
-           // On browser, this script is executed.
-           // For compatibility, on NodeJs , the Id is extracted from this script
-
-           var script = response.body ;
-           if (script.startsWith("ttrace.setClientID("))
-               clientId = script.match(/\d+/)[0];  // extract first number anywhere in the string. Result is an array of string. first : 123
-               
+           // Sample script for other messages   : ttrace._done("_1","");
+           if (body.startsWith("ttrace.setClientID("))
+               clientId = body.match(/\d+/)[0];
            setTimeout(worker, 0);
-       }
+       });
    });
+
+   req.on('error', function () { setTimeout(worker, 0); });
 
    // check every 20 seconds if msg is send
    setTimeout(worker, 20000);
@@ -3260,7 +3306,7 @@ traceClasses.TraceNodeEx.prototype =
 
          if (isRequireJs)  // isNodeJs
          {
-             stack = stackTrace.get(this.addCaller);
+             stack = getCallStack(this.addCaller);
              stackLength = stack.length;
              for (let i = 0; i < stackLength; i++)
              {
@@ -3330,7 +3376,7 @@ traceClasses.TraceNodeEx.prototype =
 
          if (isNodeJs)
          {
-            stack = stackTrace.get(this.addStackTrace);
+            stack = getCallStack(this.addStackTrace);
             stackLength = stack.length;
             for (let i = 0; i < stackLength; i++)
             {

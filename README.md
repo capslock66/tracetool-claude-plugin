@@ -47,12 +47,42 @@ Or call the tool directly:
 
 ## Available tools
 
+### Send new traces
+
 | Tool | Description |
 |---|---|
 | `tracetool_send` | Send a debug / warning / error message |
 | `tracetool_send_value` | Expandable object tree |
 | `tracetool_send_xml` | XML with syntax highlighting |
 | `tracetool_send_table` | Multi-column table |
+| `tracetool_send_object` | Object with class info, fields and methods |
+| `tracetool_send_stack` | Current call stack |
+| `tracetool_send_dump` | Hex dump of a buffer |
+
+### Modify existing nodes (require `node` JSON string)
+
+| Tool | Description |
+|---|---|
+| `tracetool_resend` | Override left and/or right message |
+| `tracetool_resend_left` | Override the left column message |
+| `tracetool_resend_right` | Override the right column message |
+| `tracetool_resend_icon_index` | Change the icon index |
+| `tracetool_set_background_color` | Change background color of a node |
+| `tracetool_append` | Append text to left and/or right column |
+| `tracetool_append_left` | Append text to the left column |
+| `tracetool_append_right` | Append text to the right column |
+| `tracetool_show` | Scroll a node into view |
+| `tracetool_set_selected` | Select a node in the viewer |
+| `tracetool_delete_it` | Delete a node |
+| `tracetool_delete_children` | Delete all children of a node |
+| `tracetool_set_bookmark` | Set or clear the bookmark flag |
+| `tracetool_set_font_detail` | Change font details for a column or whole line |
+
+### Viewer management
+
+| Tool | Description |
+|---|---|
+| `tracetool_show_viewer` | Show or hide the viewer window |
 | `tracetool_clear_all` | Clear the viewer |
 | `tracetool_set_host` | Change viewer host at runtime |
 | `tracetool_get_config` | Current host + environment flags |
@@ -64,3 +94,7 @@ Just ask Claude naturally:
 - *"Send a debug trace: processing started"*
 - *"Log this object to TraceTool"* (and paste a JSON)
 - *"Clear the viewer and trace the login flow"*
+- *"Send the call stack to TraceTool"*
+- *"Update that last trace to show the elapsed time on the right"*
+- *"Bookmark that node"*
+- *"highlight that node in yellow"*
