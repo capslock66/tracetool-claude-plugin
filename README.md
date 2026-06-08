@@ -4,26 +4,21 @@ Send structured traces to the [TraceTool](https://github.com/capslock66/Tracetoo
 
 ## Prerequisites
 
-- **TraceTool viewer** running on Windows (default port 81 for HTTP)
+- **TraceTool viewer** installed and running on Windows (default port 81 for HTTP)
 - **Node.js** installed
 
 ## Installation
 
-in claude desktop or in a console:
-
-```bash
-claude plugin marketplace add capslock66/tracetool-claude-plugin
-claude plugin install tracetool@tracetool-plugins
-claude reload-plugins
-```
-
 in claude cli:
 
 ```bash
-
 /plugin marketplace add capslock66/tracetool-claude-plugin
 /plugin install tracetool@tracetool-plugins
 /reload-plugins
+```
+Then check if the Mcp server is running
+```bash
+/mcp
 ```
 
 Of course you need to install tracetool itself,
@@ -39,7 +34,7 @@ The viewer host defaults to `127.0.0.1:81`. Override it via the plugin config or
     "tracetool@<marketplace>": {
       "mcpServers": {
         "tracetool": {
-          "env": { "TRACETOOL_HOST": "127.0.0.1:85" }
+          "env": { "TRACETOOL_HOST": "127.0.0.1:815" }
         }
       }
     }
@@ -48,21 +43,19 @@ The viewer host defaults to `127.0.0.1:81`. Override it via the plugin config or
 ```
 
 Or call the tool directly:
-> "set tracetool host to 127.0.0.1:85"
+> "set tracetool host to 127.0.0.1:81"
 
 ## Available tools
 
 | Tool | Description |
 |---|---|
 | `tracetool_send` | Send a debug / warning / error message |
-| `tracetool_clear_all` | Clear the viewer |
-| `tracetool_indent` / `tracetool_unindent` | Indented scope |
-| `tracetool_enter_method` / `tracetool_exit_method` | Method entry/exit with icons |
 | `tracetool_send_value` | Expandable object tree |
 | `tracetool_send_xml` | XML with syntax highlighting |
 | `tracetool_send_table` | Multi-column table |
-| `tracetool_get_config` | Current host + environment flags |
+| `tracetool_clear_all` | Clear the viewer |
 | `tracetool_set_host` | Change viewer host at runtime |
+| `tracetool_get_config` | Current host + environment flags |
 
 ## Usage examples
 
@@ -71,4 +64,3 @@ Just ask Claude naturally:
 - *"Send a debug trace: processing started"*
 - *"Log this object to TraceTool"* (and paste a JSON)
 - *"Clear the viewer and trace the login flow"*
-- *"Enter method ProcessOrder in TraceTool"*

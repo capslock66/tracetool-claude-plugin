@@ -1,7 +1,7 @@
 ﻿//------------------------------------------------------------------------------
 //  TraceTool JavaScript API.
 //  Author : Thierry Parent
-//  Version : 13.2.6
+//  Version : 15.0.0
 //
 //  sample use for NodeJs:    
 //     var ttrace = require('tracetool') ;
@@ -22,7 +22,7 @@
 //     ttrace.debug.send("Hello world");
 //
 //
-//   See http://www.codeproject.com/Articles/5498/TraceTool-The-Swiss-Army-Knife-of-Trace for full sample use
+//   See https://github.com/capslock66/tracetool for full sample use
 //------------------------------------------------------------------------------
 
 // NodeJs v6.x, v7.x use Chrome V8 JavaScript engine (ES5), but support some ES6 features (ECMAScript 2015)
@@ -63,14 +63,13 @@ var request ;                              /** nodejs library                   
 var stackTrace;                            /** nodejs library                                           */
 var uuidv4 ;                               /** nodejs library                                           */
 
-
 var requestId = 0;                         /** number of request                                        */
 var toSend = [];                           /** array of script to run.                                  */
 var nbDone = 0;                            /** number of message send                                   */ 
 var winTraceSingeton = null;               /** main WinTrace                                            */
 var watchesSingeton = null;                /** main WinWatch                                            */
 var clientId = "";                         /** Communication ID with the viewer                         */  
-var host = "127.0.0.1:81";                 /** Full Url to TraceTool viewer (localhost:81 for example)  */
+var host = "127.0.0.1:85";                 /** Full Url to TraceTool viewer (localhost:85 for example)  */
 var traceClasses = {};                     /** Contains all tracetool classes                           */
 
 var isChromeExtension ;                    /** library run under chrome as an extension                 */

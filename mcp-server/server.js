@@ -43,19 +43,113 @@ ttrace.host = process.env.TRACETOOL_HOST || "127.0.0.1:81";
 // ---------------------------------------------------------------------------
 const server = new McpServer({
   name: "tracetool",
-  version: "1.0.0",
+  version: "15.0.0",
 });
 
 // -----------------------------------------------------------------------
-// Tool: set_host
+// Tool: send
 // -----------------------------------------------------------------------
 server.tool(
-  "tracetool_set_host",
-  "Set the TraceTool viewer host (e.g. '127.0.0.1:81'). Call this before other tools if the viewer runs on a different port.",
-  { host: z.string().describe("host:port of the TraceTool viewer") },
-  async ({ host }) => {
-    ttrace.host = host;
-    return { content: [{ type: "text", text: `TraceTool host set to ${host}` }] };
+  "tracetool_send",
+  "Send a trace message to the TraceTool viewer. Returns the serialized node. If parentNode is provided, the message is attached as a child of that node.",
+  {
+    parentNode: z.string().optional().describe("JSON string of a previously returned node. If provided, the message is sent as a child of that node."),
+    level:      z.enum(["debug", "warning", "error"]).default("debug").describe("Trace level"),
+    message:    z.string().describe("Main (left column) message text"),
+    right:      z.string().optional().describe("Optional right-column message"),
+  },
+  async ({ parentNode,level, message, right }) => {
+    let sender;
+    if (parentNode) {
+      var parentNodeObject = JSON.parse(parentNode);
+      sender = new ttrace.classes.TraceNode(null, false);
+      sender.id = parentNodeObject.id;
+    } else {
+      sender = ttrace[level];
+    }
+    var node = sender.send(message, right);
+    return { content: [{ type: "text", text: JSON.stringify(node) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: send_value
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_send_value",
+  "Send a JavaScript object/value to the TraceTool viewer as an expandable tree. If parentNode is non-null, the value is attached as a child of that node.",
+  {
+    parentNode: z.string().nullable().describe("JSON string of a previously returned node, or null to send at root level."),
+    level:      z.enum(["debug", "warning", "error"]).default("debug"),
+    message:    z.string().describe("Label for the value"),
+    value:      z.string().describe("JSON-encoded value to inspect (will be parsed)"),
+    maxLevel:   z.number().int().min(1).max(10).default(3).describe("Max tree depth"),
+  },
+  async ({ parentNode, level, message, value, maxLevel }) => {
+    let sender;
+    if (parentNode) {
+      sender = new ttrace.classes.TraceNode(null, false);
+      sender.id = JSON.parse(parentNode).id;
+    } else {
+      sender = ttrace[level];
+    }
+    let parsed;
+    try { parsed = JSON.parse(value); } catch { parsed = value; }
+    var node = sender.sendValue(message, parsed, maxLevel);
+    return { content: [{ type: "text", text: JSON.stringify(node) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: send_xml
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_send_xml",
+  "Send an XML string to the TraceTool viewer with syntax highlighting. If parentNode is non-null, the XML is attached as a child of that node.",
+  {
+    parentNode: z.string().nullable().describe("JSON string of a previously returned node, or null to send at root level."),
+    level:      z.enum(["debug", "warning", "error"]).default("debug"),
+    message:    z.string().describe("Label for the XML trace"),
+    xml:        z.string().describe("XML text to display"),
+  },
+  async ({ parentNode, level, message, xml }) => {
+    let sender;
+    if (parentNode) {
+      sender = new ttrace.classes.TraceNode(null, false);
+      sender.id = JSON.parse(parentNode).id;
+    } else {
+      sender = ttrace[level];
+    }
+    var node = sender.sendXml(message, xml);
+    return { content: [{ type: "text", text: JSON.stringify(node) }] };
+  }
+);
+
+// -----------------------------------------------------------------------
+// Tool: send_table
+// -----------------------------------------------------------------------
+server.tool(
+  "tracetool_send_table",
+  "Send a table (array of objects) to the TraceTool viewer. If parentNode is non-null, the table is attached as a child of that node.",
+  {
+    parentNode: z.string().nullable().describe("JSON string of a previously returned node, or null to send at root level."),
+    level:      z.enum(["debug", "warning", "error"]).default("debug"),
+    message:    z.string().describe("Label for the table"),
+    rows:       z.string().describe("JSON array of row objects, e.g. [{col1:'a', col2:1}, ...]"),
+  },
+  async ({ parentNode, level, message, rows }) => {
+    let sender;
+    if (parentNode) {
+      sender = new ttrace.classes.TraceNode(null, false);
+      sender.id = JSON.parse(parentNode).id;
+    } else {
+      sender = ttrace[level];
+    }
+    let parsed;
+    try { parsed = JSON.parse(rows); }
+    catch { return { content: [{ type: "text", text: "Error: rows must be a valid JSON array." }] }; }
+    var node = sender.sendTable(message, parsed);
+    return { content: [{ type: "text", text: JSON.stringify(node) }] };
   }
 );
 
@@ -73,144 +167,15 @@ server.tool(
 );
 
 // -----------------------------------------------------------------------
-// Tool: send
+// Tool: set_host
 // -----------------------------------------------------------------------
 server.tool(
-  "tracetool_send",
-  "Send a trace message to the TraceTool viewer.",
-  {
-    level:   z.enum(["debug", "warning", "error"]).default("debug").describe("Trace level"),
-    message: z.string().describe("Main (left column) message text"),
-    right:   z.string().optional().describe("Optional right-column message"),
-  },
-  async ({ level, message, right }) => {
-    ttrace[level].send(message, right);
-    return { content: [{ type: "text", text: `[${level}] ${message}${right ? " | " + right : ""}` }] };
-  }
-);
-
-// -----------------------------------------------------------------------
-// Tool: indent
-// -----------------------------------------------------------------------
-server.tool(
-  "tracetool_indent",
-  "Send a trace message and indent subsequent traces under it (like entering a scope).",
-  {
-    level:   z.enum(["debug", "warning", "error"]).default("debug"),
-    message: z.string().describe("Message to show at the indent level"),
-    right:   z.string().optional(),
-  },
-  async ({ level, message, right }) => {
-    ttrace[level].indent(message, right, undefined, true);
-    return { content: [{ type: "text", text: `Indented: [${level}] ${message}` }] };
-  }
-);
-
-// -----------------------------------------------------------------------
-// Tool: unindent
-// -----------------------------------------------------------------------
-server.tool(
-  "tracetool_unindent",
-  "Close the current indent level. Optionally send a closing message.",
-  {
-    level:   z.enum(["debug", "warning", "error"]).default("debug"),
-    message: z.string().optional().describe("Optional closing message"),
-    right:   z.string().optional(),
-  },
-  async ({ level, message, right }) => {
-    ttrace[level].unIndent(message, right, undefined, true);
-    return { content: [{ type: "text", text: `Unindented${message ? ": " + message : ""}` }] };
-  }
-);
-
-// -----------------------------------------------------------------------
-// Tool: enter_method
-// -----------------------------------------------------------------------
-server.tool(
-  "tracetool_enter_method",
-  "Send an 'Enter methodName' trace with indent — use at the start of a logical operation.",
-  {
-    level:  z.enum(["debug", "warning", "error"]).default("debug"),
-    method: z.string().describe("Method or operation name"),
-    right:  z.string().optional(),
-  },
-  async ({ level, method, right }) => {
-    ttrace[level].enterMethod(method, right);
-    return { content: [{ type: "text", text: `Enter: ${method}` }] };
-  }
-);
-
-// -----------------------------------------------------------------------
-// Tool: exit_method
-// -----------------------------------------------------------------------
-server.tool(
-  "tracetool_exit_method",
-  "Send an 'Exit methodName' trace with unindent — use at the end of a logical operation.",
-  {
-    level:  z.enum(["debug", "warning", "error"]).default("debug"),
-    method: z.string().describe("Method or operation name"),
-    right:  z.string().optional(),
-  },
-  async ({ level, method, right }) => {
-    ttrace[level].exitMethod(method, right);
-    return { content: [{ type: "text", text: `Exit: ${method}` }] };
-  }
-);
-
-// -----------------------------------------------------------------------
-// Tool: send_value
-// -----------------------------------------------------------------------
-server.tool(
-  "tracetool_send_value",
-  "Send a JavaScript object/value to the TraceTool viewer as an expandable tree.",
-  {
-    level:    z.enum(["debug", "warning", "error"]).default("debug"),
-    message:  z.string().describe("Label for the value"),
-    value:    z.string().describe("JSON-encoded value to inspect (will be parsed)"),
-    maxLevel: z.number().int().min(1).max(10).default(3).describe("Max tree depth"),
-  },
-  async ({ level, message, value, maxLevel }) => {
-    let parsed;
-    try { parsed = JSON.parse(value); } catch { parsed = value; }
-    ttrace[level].sendValue(message, parsed, maxLevel);
-    return { content: [{ type: "text", text: `Sent value '${message}' to viewer.` }] };
-  }
-);
-
-// -----------------------------------------------------------------------
-// Tool: send_xml
-// -----------------------------------------------------------------------
-server.tool(
-  "tracetool_send_xml",
-  "Send an XML string to the TraceTool viewer with syntax highlighting.",
-  {
-    level:   z.enum(["debug", "warning", "error"]).default("debug"),
-    message: z.string().describe("Label for the XML trace"),
-    xml:     z.string().describe("XML text to display"),
-  },
-  async ({ level, message, xml }) => {
-    ttrace[level].sendXml(message, xml);
-    return { content: [{ type: "text", text: `Sent XML '${message}' to viewer.` }] };
-  }
-);
-
-// -----------------------------------------------------------------------
-// Tool: send_table
-// -----------------------------------------------------------------------
-server.tool(
-  "tracetool_send_table",
-  "Send a table (array of objects) to the TraceTool viewer.",
-  {
-    level:   z.enum(["debug", "warning", "error"]).default("debug"),
-    message: z.string().describe("Label for the table"),
-    rows:    z.string().describe("JSON array of row objects, e.g. [{col1:'a', col2:1}, ...]"),
-  },
-  async ({ level, message, rows }) => {
-    let parsed;
-    try { parsed = JSON.parse(rows); }
-    catch { return { content: [{ type: "text", text: "Error: rows must be a valid JSON array." }] }; }
-    ttrace[level].sendTable(message, parsed);
-    return { content: [{ type: "text", text: `Sent table '${message}' (${parsed.length} rows) to viewer.` }] };
+  "tracetool_set_host",
+  "Set the TraceTool viewer host (e.g. '127.0.0.1:81'). Call this before other tools if the viewer runs on a different port.",
+  { host: z.string().describe("host:port of the TraceTool viewer") },
+  async ({ host }) => {
+    ttrace.host = host;
+    return { content: [{ type: "text", text: JSON.stringify({ host }) }] };
   }
 );
 

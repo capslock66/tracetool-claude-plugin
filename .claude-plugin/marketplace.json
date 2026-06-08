@@ -2,7 +2,7 @@
   "name": "tracetool-plugins",
   "owner": {
     "name": "Thierry Parent",
-    "email": "thierry.parent@eortc.org",
+    "email": "mail.thierry.parent@gmail.com",
     "url": "https://github.com/capslock66"
   },
   "description": "Claude Code plugins for the TraceTool trace viewer",

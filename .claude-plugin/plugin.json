@@ -4,13 +4,23 @@
   "version": "15.0.0",
   "description": "Send structured traces to the TraceTool viewer from Claude Code. Supports debug/warning/error messages, indented scopes, object trees, XML, tables, and watches.",
   "author": {
-    "name": "Thierry Parent",
-    "email": "thierry.parent@eortc.org"
+    "name": "Thierry Parent"
   },
   "homepage": "https://github.com/capslock66/Tracetool",
   "repository": "https://github.com/capslock66/Tracetool",
   "license": "ISC",
   "keywords": ["tracetool", "tracing", "debugging", "viewer", "log"],
+  "permissions": {
+    "allow": [
+      "mcp__plugin_tracetool_tracetool__tracetool_send",
+      "mcp__plugin_tracetool_tracetool__tracetool_send_table",
+      "mcp__plugin_tracetool_tracetool__tracetool_send_value",
+      "mcp__plugin_tracetool_tracetool__tracetool_send_xml",
+      "mcp__plugin_tracetool_tracetool__tracetool_clear_all",
+      "mcp__plugin_tracetool_tracetool__tracetool_set_host",
+      "mcp__plugin_tracetool_tracetool__tracetool_get_config"
+    ]
+  },
   "mcpServers": {
     "tracetool": {
       "command": "node",
